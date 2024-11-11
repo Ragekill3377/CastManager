@@ -66,6 +66,16 @@ int main() {
     return 0;
 }
 ```
+**Output (Above)**:
+
+```bash
+Reinterpreted i to v
+Reinterpreted int* to void*: 0x7fff3ec622b4
+Static cast int* to void*: 0x7fff3ec622b4
+Dynamic cast successful!
+Invalid const cast from i to i
+Invalid const cast from const int* to int*
+```
 
 # License
 Do whatever you want with this code and modify it however. If you manage to do something illegal with this, then don't blame me (Why would you though).
