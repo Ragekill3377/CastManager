@@ -10,68 +10,98 @@ castManager->dynamic
 castManager->reinterpret
 
 */
-
 #pragma once
 
 #include <iostream>
 #include <memory>
-#include <type_traits>
+#include <typeinfo>
+#include <functional>
+#include <thread>
+#include <chrono>
+#include <pthread.h>
 
 class CastManager {
 public:
-    CastManager() = default;
+    static std::shared_ptr<CastManager> init();
+    template <typename From, typename To>
+    void cast_static(std::shared_ptr<void> ptr);
+    template <typename From, typename To>
+    void dynamic(std::shared_ptr<From> ptr);
+    template <typename From, typename To>
+    void reinterpret(std::shared_ptr<void> ptr);
 
-    static std::shared_ptr<CastManager> init() {
-        return std::make_shared<CastManager>();
-    }
-
-     template <typename From, typename To>
-    To* cast_static(From* ptr) {
-        if (!ptr) {
-            return nullptr;
-        }
-        if (std::is_convertible<From*, To*>::value) {
-            return static_cast<To*>(ptr);
-        } else {
-            std::cerr << "Invalid static cast from " << typeid(From).name() << " to " << typeid(To).name() << std::endl;
-            return nullptr;
-        }
-    }
+private:
+    template <typename From, typename To>
+    void log_cast_error(const char* type);
 
     template <typename From, typename To>
-    To* dynamic(From* ptr) {
-        if (!ptr) {
-            return nullptr;
-        }
-        To* result = dynamic_cast<To*>(ptr);
-        if (result) {
-            return result;
-        } else {
-            std::cerr << "Invalid dynamic cast from " << typeid(From).name() << " to " << typeid(To).name() << std::endl;
-            return nullptr;
-        }
-    }
+    void log_reinterpret();
 
-    template <typename From, typename To>
-    To* cast_const(From* ptr) {
-        if (!ptr) {
-            return nullptr;
-        }
-        if (std::is_convertible<From*, To*>::value) {
-            return const_cast<To*>(ptr);
-        } else {
-            std::cerr << "Invalid const cast from " << typeid(From).name() << " to " << typeid(To).name() << std::endl;
-            return nullptr;
-        }
-    }
-
-    template <typename From, typename To>
-    To* reinterpret(From* ptr) {
-        if (!ptr) {
-            return nullptr;
-        }
-        To* result = reinterpret_cast<To*>(ptr);
-        std::cout << "Reinterpreted " << typeid(From).name() << " to " << typeid(To).name() << std::endl;
-        return result;
-    }
+    void enqueue_cast_task(std::function<void()> task);
 };
+
+std::shared_ptr<CastManager> CastManager::init() {
+    return std::make_shared<CastManager>();
+}
+
+template <typename From, typename To>
+void CastManager::cast_static(std::shared_ptr<void> ptr) {
+    std::function<void()> task = [this, ptr]() {
+        To* result = nullptr;
+        if (ptr && std::is_convertible<From*, To*>::value) {
+            result = std::static_pointer_cast<To>(ptr).get();
+        } else {
+            log_cast_error<From, To>("static");
+        }
+    };
+    enqueue_cast_task(task);
+}
+
+template <typename From, typename To>
+void CastManager::dynamic(std::shared_ptr<From> ptr) {
+    std::function<void()> task = [this, ptr]() {
+        if (ptr) {
+            auto result = std::dynamic_pointer_cast<To>(ptr);
+            if (result) {
+                std::cout << "Dynamic cast succeeded!" << std::endl;
+            } else {
+                log_cast_error<From, To>("dynamic");
+            }
+        }
+    };
+    enqueue_cast_task(task);
+}
+
+
+template <typename From, typename To>
+void CastManager::reinterpret(std::shared_ptr<void> ptr) {
+    std::function<void()> task = [this, ptr]() {
+        To* result = nullptr;
+        if (ptr) {
+            result = reinterpret_cast<To*>(ptr.get());
+            log_reinterpret<From, To>();
+        }
+    };
+    enqueue_cast_task(task);
+}
+
+template <typename From, typename To>
+void CastManager::log_cast_error(const char* type) {
+    std::cerr << "Cast error: " << typeid(From).name() << " to " << typeid(To).name() << " (" << type << ")" << std::endl;
+}
+
+template <typename From, typename To>
+void CastManager::log_reinterpret() {
+    std::string msg = "Reinterpreted " + std::string(typeid(From).name()) + " to " + typeid(To).name();
+    std::cerr << msg << std::endl;
+}
+
+void CastManager::enqueue_cast_task(std::function<void()> task) {
+    pthread_t thread;
+    pthread_create(&thread, nullptr, [](void* arg) -> void* {
+        auto taskFunc = static_cast<std::function<void()>*>(arg);
+        (*taskFunc)();
+        return nullptr;
+    }, new std::function<void()>(task));
+    pthread_detach(thread);
+}
