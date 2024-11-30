@@ -23,58 +23,50 @@ Simply include the `CastManager.h` header in your C++ project:
 # Code example:
 ```cpp
 #include <iostream>
+#include <memory>
+#include <typeinfo>
 #include "CastManager.h"
 
+class Base {
+public:
+    virtual ~Base() = default;
+};
+
+class Derived : public Base {
+public:
+    void hello() { std::cout << "Hello from Derived!" << std::endl; }
+};
+
 int main() {
-    auto castManager = CastManager::init(); // shared ptr instance
+    // init
+    auto castManager = CastManager::init();
 
-    // reinterpret (valid)
-    int a = 5;
-    int* intPtr = &a;
-    void* voidPtr = castManager->reinterpret<int, void>(intPtr); 
-    std::cout << "Reinterpreted int* to void*: " << voidPtr << std::endl;
+    
+    std::shared_ptr<Base> basePtr = std::make_shared<Derived>();
 
-    // static (valid)
-    void* voidPtrStatic = castManager->cast_static<int, void>(intPtr); 
-    std::cout << "Static cast int* to void*: " << voidPtrStatic << std::endl;
+    
+    castManager->cast_static<Base, Derived>(basePtr);
 
-    // dynamic (valid)
-    struct Foundation { virtual ~Foundation() = default; };
-    struct Derived : public Foundation {};
-    Foundation* basePtr = new Derived();
-    Derived* derivedPtr = castManager->dynamic<Foundation, Derived>(basePtr);
-    if (derivedPtr) {
-        std::cout << "Dynamic cast successful!" << std::endl;
-    } else {
-        std::cerr << "Invalid dynamic cast from Foundation* to Derived*" << std::endl;
-    }
+    
+    castManager->dynamic<Base, Derived>(basePtr);
 
-    // invalid
-    /*  const-casting between const int* and int* is invalid when trying to modify the value of a const object or if the object itself is defined as const.  */
-    const int b = 10;
-    const int* constIntPtr = &b;
-    int* nonconstint = castManager->cast_const<const int, int>(constIntPtr);  // Const cast (valid)
-    if (nonconstint) {
-        std::cout << "Const cast successful!" << std::endl;
-    } else {
-        std::cerr << "Invalid const cast from const int* to int*" << std::endl;
-    }
+    
+    castManager->reinterpret<Base, Derived>(basePtr);
 
-
-    delete basePtr;
+    
+    std::this_thread::sleep_for(std::chrono::seconds(2));
 
     return 0;
 }
+
 ```
 **Output (Above)**:
 
 ```bash
-Reinterpreted i to v
-Reinterpreted int* to void*: 0x7fff3ec622b4
-Static cast int* to void*: 0x7fff3ec622b4
-Dynamic cast successful!
-Invalid const cast from i to i
-Invalid const cast from const int* to int*
+Cast error: 4BaseDynamic cast succeeded!
+ to 7Derived (static)
+Reinterpreted 4Base to 7Derived
+
 ```
 
 # License
